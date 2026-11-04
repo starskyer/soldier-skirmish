@@ -28,7 +28,7 @@
 - [ ] **玩法与显示细节**：初始视野计算、固定窗口尺寸及尚未启用的基地反击逻辑仍待整理。
 - [ ] **运行回归**：在完整环境下重新验证构建、整局对战、暂停/恢复、视野切换和中途退出。
 
-整理版已通过文件完整性与静态检查，**尚未完成重新编译和运行验证**。原始代码的具体问题及整理版已处理的部分见 [详细代码审查](docs/CODE_REVIEW.md)，验证情况见 [评估报告](docs/ASSESSMENT.md)。
+我用 [GitHub Actions](https://github.com/starskyer/soldier-skirmish/actions) 检查 Windows / Linux 的构建、资源校验和无窗口启动。这些检查不覆盖完整对局、实际交互和长时间运行的稳定性，TODO 中的问题仍需后续验证。
 
 ## 构建：无需 Visual Studio IDE
 
@@ -68,7 +68,7 @@ ctest --test-dir build --output-on-failure
 ./build/soldier-skirmish
 ```
 
-实际游戏需要图形桌面。`ctest` 的启动检查使用 SDL dummy 视频驱动，仅加载、绘制初始棋盘并退出，不启动对战线程。Linux 构建流程已提供，是否实际验证请以评估报告为准。
+实际游戏需要图形桌面。`ctest` 的启动检查使用 SDL dummy 视频驱动，仅加载、绘制初始棋盘并退出，不启动对战线程。
 
 也可以使用 Clang 或 MSVC 命令行工具链，只需提供与工具链和架构匹配的 SDL2 CMake 包；多配置生成器需要添加 `--config Debug` / `-C Debug`。不同编译器使用不同构建目录。
 
@@ -92,7 +92,7 @@ Windows 中使用对应构建目录和 `.exe`。`--check-assets` 验证所需文
 ```text
 src/                    游戏源码及启动资源校验
 assets/                 地图、基地配置、图片、字体和字体许可证
-docs/                   整理评估、原始类图与源文件校验清单
+docs/                   课程项目类图等长期项目文档
 tools/audit_project.py  不依赖第三方 Python 包的静态文件检查
 .github/workflows/      Windows / Linux 构建及启动检查
 CMakeLists.txt          独立于 IDE 的构建入口

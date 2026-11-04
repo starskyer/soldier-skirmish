@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         // Detached simulation workers retain the model until process exit.
-        // Managed shutdown is a remaining issue in docs/ASSESSMENT.md.
+        // Managed shutdown remains a TODO in README.md.
         Model* model = new Model(assetPath("map.txt"), assetPath("base.txt"));
         Controller controller(model, smoke);
         return 0;

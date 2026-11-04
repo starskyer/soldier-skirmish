@@ -1,20 +1,12 @@
 """Read-only inventory checks; no compiler or third-party Python packages required."""
-import argparse
-import hashlib
-import json
 from pathlib import Path
 import re
 import sys
-import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--original', type=Path, help='Optional original Cpp_Files folder')
-    parser.add_argument('--manifest', type=Path, help='Write original selected-file SHA256 manifest')
-    args = parser.parse_args()
     errors = []
     sources = sorted((ROOT / 'src').glob('*'))
     for source in sources:
@@ -70,34 +62,6 @@ def main():
             errors.append(f'{source.name}: omitted from CMake build')
     print(f'Local source/header files: {len(sources)}; runtime assets: {len(assets)}')
     print(f'Map: {len(rows[0])} x {len(rows)} = {size} cells')
-    if args.original:
-        original = args.original.resolve()
-        for project in sorted(original.glob('**/*.vcxproj')):
-            missing = []
-            for element in ET.parse(project).getroot().iter():
-                if element.tag.rsplit('}', 1)[-1] in ('ClCompile', 'ClInclude', 'Text', 'ResourceCompile', 'None'):
-                    name = element.get('Include')
-                    if name and '$(' not in name and not (project.parent / name).is_file():
-                        missing.append(name)
-            print(f'Original {project.relative_to(original)}: missing entries = {missing}')
-            if project == original / 'game/game/game.vcxproj' and missing:
-                errors.append('Selected original VS project references missing files')
-        selected = [*sorted((original / 'game/game').glob('*.cpp')),
-                    *sorted((original / 'game/game').glob('*.h')),
-                    original / 'game/game/map.txt', original / 'game/game/base.txt',
-                    *sorted((original / 'game/texture').glob('*.png')),
-                    original / 'game/ClassDiagram.png']
-        for name in ('map.txt', 'base.txt'):
-            if (ROOT / 'assets' / name).read_bytes() != (original / 'game/game' / name).read_bytes():
-                errors.append(f'Original data changed: {name}')
-        for image in (original / 'game/texture').glob('*.png'):
-            if image.read_bytes() != (ROOT / 'assets/texture' / image.name).read_bytes():
-                errors.append(f'Original image changed: {image.name}')
-        if args.manifest:
-            args.manifest.write_text(json.dumps({
-                'selected_version': 'game',
-                'files': {p.relative_to(original).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in selected}}, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     for error in errors:
         print('FAIL:', error, file=sys.stderr)
     print('PASS' if not errors else f'{len(errors)} issue(s)')

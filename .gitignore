@@ -1,5 +1,17 @@
 /build*/
 /out/
+/cmake-build-*/
+/.local/
+/tmp/
+/logs/
+/reports/
+/test-results/
+/.cache/
+/CMakeUserPresets.json
+# One-off migration/review records belong outside this repository.
+/docs/ASSESSMENT.md
+/docs/CODE_REVIEW.md
+/docs/original-source-manifest.json
 /.vs/
 /.vscode/
 *.user
@@ -13,3 +25,10 @@
 .DS_Store
 .private/
 .portable/
+__pycache__/
+*.py[cod]
+*.log
+*.dmp
+.env
+.env.*
+!.env.example
