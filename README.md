@@ -1,10 +1,10 @@
 # Soldier Skirmish · 士兵遭遇战
 
-这是我在 **2024 年 1 月**完成的数据结构课程大作业，一个用 C++ 和 SDL2 编写的士兵对战模拟小游戏。两支队伍在网格地图中自动出兵、寻路和交战，目标是摧毁对方基地。游戏代码和七张兵种、基地图片都由我独立完成。
+基于 C++ 和 SDL2 的网格士兵对战模拟小游戏。两支队伍在包含障碍物的地图中自动出兵、寻路和交战，以摧毁对方基地为目标。
 
-当时我刚开始学习 C++，主要目标是把课堂上学到的数据结构和面向对象设计用起来，完成一个可以演示的小游戏。原版在 Visual Studio 环境下能够运行，但我没有对并发、资源管理和异常情况做系统评估。
+项目完成于 **2024 年 1 月**，为数据结构课程大作业，包含 MVC 结构、BFS 寻路、兵种工厂、攻击策略和视野观察者设计。当前仓库提供 CMake 构建、资源校验及 Windows / Linux 自动检查。
 
-现在我把它整理到 GitHub，保留课程时期的 MVC 结构、BFS 寻路、兵种工厂、攻击策略和视野观察者设计，补充 CMake 构建、资源校验和项目说明。目前以记录和展示这份课程作品为主，暂不继续维护游戏逻辑。
+当前以课程作品归档与展示为主，暂不进行游戏逻辑维护。已知问题见 [TODO 与已知风险](#todo-与已知风险)。
 
 ## 玩法与实现
 
@@ -17,24 +17,11 @@
 
 默认窗口为 1080 × 1230，较矮的屏幕可能显示不全；可修改 `src/globalParameters.h` 中的窗口尺寸后重新构建。
 
-## TODO 与已知风险
+## 构建
 
-我先把尚未解决的问题记录在这里，作为以后有机会继续整理时的参考：
+依赖：C++17 编译器、CMake ≥ 3.21，以及 **SDL2、SDL2_image、SDL2_ttf 的开发包**。SDL3 与 SDL2 API 不兼容。SDL 开发包通过包管理器安装，SDK 和预编译库不随仓库分发。
 
-- [ ] **并发同步**：生命值、棋盘、暂停和刷新标记存在跨线程读写，可能导致偶发崩溃、卡住或状态更新丢失。
-- [ ] **移动与攻击的一致性**：多个士兵争抢同一格、目标在行动前移动等情况缺少完整复核，可能出现占格冲突、攻击错误对象或死亡单位重新占格。
-- [ ] **线程退出**：部分线程使用 `detach()`，并有忙等待循环；关闭窗口、暂停和对局结束时的停止流程需要统一。
-- [ ] **对象与资源管理**：仍有裸指针和对象所有权不明确的问题，长时间运行可能累积内存泄漏。
-- [ ] **玩法与显示细节**：初始视野计算、固定窗口尺寸及尚未启用的基地反击逻辑仍待整理。
-- [ ] **运行回归**：在完整环境下重新验证构建、整局对战、暂停/恢复、视野切换和中途退出。
-
-我用 [GitHub Actions](https://github.com/starskyer/soldier-skirmish/actions) 检查 Windows / Linux 的构建、资源校验和无窗口启动。这些检查不覆盖完整对局、实际交互和长时间运行的稳定性，TODO 中的问题仍需后续验证。
-
-## 构建：无需 Visual Studio IDE
-
-需要 C++17 编译器、CMake ≥ 3.21，以及 **SDL2、SDL2_image、SDL2_ttf 的开发包**。SDL3 与 SDL2 API 不兼容，请安装 SDL2 系列。依赖通过包管理器安装，不把旧版 DLL、`.lib` 或整个 SDK 提交到项目中。
-
-先克隆仓库，下面的构建命令均在项目根目录执行：
+克隆仓库，以下构建命令均在项目根目录执行：
 
 ```bash
 git clone https://github.com/starskyer/soldier-skirmish.git
@@ -53,7 +40,7 @@ ctest --test-dir build-ucrt --output-on-failure
 ./build-ucrt/soldier-skirmish.exe
 ```
 
-保持在 UCRT64 终端启动，以便找到包管理器安装的间接依赖 DLL。CMake 会复制直接依赖 DLL，但不会自动制作可在任意电脑运行的完整发行包。不要混用 MSVC 的 `.lib` 和 MSYS2 的开发包。
+程序在 UCRT64 终端中启动，以便找到包管理器安装的间接依赖 DLL。CMake 会复制直接依赖 DLL；独立发行包还需收集间接依赖。MSVC 的 `.lib` 与 MSYS2 开发包应分别使用，不混用工具链。
 
 参考：[MSYS2 环境选择](https://www.msys2.org/docs/environments/)、[SDL2](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-SDL2)、[SDL2_image](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-SDL2_image)、[SDL2_ttf](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-SDL2_ttf)。
 
@@ -70,11 +57,17 @@ ctest --test-dir build --output-on-failure
 
 实际游戏需要图形桌面。`ctest` 的启动检查使用 SDL dummy 视频驱动，仅加载、绘制初始棋盘并退出，不启动对战线程。
 
-也可以使用 Clang 或 MSVC 命令行工具链，只需提供与工具链和架构匹配的 SDL2 CMake 包；多配置生成器需要添加 `--config Debug` / `-C Debug`。不同编译器使用不同构建目录。
+Clang 和 MSVC 命令行工具链需要配置与其架构匹配的 SDL2 CMake 包。多配置生成器使用 `--config Debug` / `-C Debug`；不同编译器使用独立构建目录。
 
-## 资源与自检
+## 配置与资源
 
-构建会把 `assets/` 复制到可执行文件旁。程序从自身所在目录查找资源，无需把终端切到原来的 Visual Studio 项目目录：
+`assets/map.txt` 首行为总格数，之后每行对应地图的一行；`0` 为可通行地面，非零数字为障碍物。
+
+`assets/base.txt` 有两组数据，每组为队伍编号、基地中心格下标、出兵格下标，下标从 0 开始按行排列。兵种数值、出兵周期和窗口尺寸在 `src/globalParameters.h` 中配置。
+
+构建会把 `assets/` 复制到可执行文件旁。程序从可执行文件所在目录查找资源，也可通过 `--assets` 指定其他资源目录。
+
+## 检查
 
 ```bash
 ./build/soldier-skirmish --check-assets
@@ -83,11 +76,15 @@ ctest --test-dir build --output-on-failure
 python3 tools/audit_project.py
 ```
 
-Windows 中使用对应构建目录和 `.exe`。`--check-assets` 验证所需文件及地图/基地数据；`--smoke-test` 进一步验证 SDL、PNG 解码、字体加载、初始绘制和资源释放。检查通过不代表长时间对战没有线程问题。
+Windows 使用对应构建目录和 `.exe` 后缀。
 
-`assets/map.txt` 首行为总格数，之后每行对应地图的一行；`0` 为可通行地面，非零数字为障碍物。`assets/base.txt` 有两组数据，每组为队伍编号、基地中心格下标、出兵格下标，下标从 0 开始按行排列。兵种数值与出兵周期在 `src/globalParameters.h` 中。
+- `--check-assets`：验证所需文件及地图、基地数据。
+- `--smoke-test`：验证 SDL 初始化、PNG 解码、字体加载、初始绘制和资源释放，然后退出。
+- `tools/audit_project.py`：检查本地头文件引用、编译文件清单及资源完整性，不依赖第三方 Python 包。
 
-## 目录与项目来源
+[GitHub Actions](https://github.com/starskyer/soldier-skirmish/actions) 在 Windows / Linux 上执行构建、资源校验和无窗口启动检查。这些检查不覆盖完整对局、实际交互或长时间运行的并发稳定性。
+
+## 目录结构
 
 ```text
 src/                    游戏源码及启动资源校验
@@ -98,6 +95,19 @@ tools/audit_project.py  不依赖第三方 Python 包的静态文件检查
 CMakeLists.txt          独立于 IDE 的构建入口
 ```
 
-我以原始目录中较新的 `game` 版本为基础进行整理，没有混入更早的 `soliderfight` 实现或 `test` 练习，也没有携带 `.vs` 缓存、历史可执行文件及 PDB。原始类图见 [课程项目类图](docs/original-class-diagram.png)，它记录当时的结构，不包含新增启动校验模块。
+原始课程设计见 [项目类图](docs/original-class-diagram.png)，其中不包含后续新增的启动校验模块。
 
-整理时，我将原来使用的 Arial 字体换成了 [Noto Sans](https://github.com/google/fonts/tree/main/ofl/notosans)，附带 [SIL OFL 1.1](assets/font/OFL.txt)。第三方来源、哈希与许可说明见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+## TODO 与已知风险
+
+原版曾在 Visual Studio 环境下运行，未经过系统的并发与长时间运行评估。以下问题仍待处理：
+
+- [ ] **并发同步**：生命值、棋盘、暂停和刷新标记存在跨线程读写，可能导致偶发崩溃、卡住或状态更新丢失。
+- [ ] **移动与攻击的一致性**：多个士兵争抢同一格、目标在行动前移动等情况缺少完整复核，可能出现占格冲突、攻击错误对象或死亡单位重新占格。
+- [ ] **线程退出**：部分线程使用 `detach()`，并有忙等待循环；关闭窗口、暂停和对局结束时的停止流程需要统一。
+- [ ] **对象与资源管理**：仍有裸指针和对象所有权不明确的问题，长时间运行可能累积内存泄漏。
+- [ ] **玩法与显示细节**：初始视野计算、固定窗口尺寸及尚未启用的基地反击逻辑仍待整理。
+- [ ] **完整对局验证**：补充整局对战、暂停/恢复、视野切换和中途退出的交互回归。
+
+## 素材与第三方依赖
+
+游戏代码及七张兵种、基地图片为原创内容。字体使用 [Noto Sans](https://github.com/google/fonts/tree/main/ofl/notosans)，按 [SIL OFL 1.1](assets/font/OFL.txt) 分发。SDL 依赖、字体来源及许可说明见 [第三方声明](THIRD_PARTY_NOTICES.md)。
