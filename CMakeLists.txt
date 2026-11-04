@@ -9,7 +9,11 @@ add_executable(soldier-skirmish
     src/chessboard.cpp src/controller.cpp src/model.cpp src/soldier.cpp
     src/soldier_move.cpp src/view.cpp src/vision.cpp)
 target_compile_features(soldier-skirmish PRIVATE cxx_std_17)
-set_target_properties(soldier-skirmish PROPERTIES CXX_EXTENSIONS OFF)
+# Keep the filesystem UTF-8 interfaces on the project's C++17 contract.
+set_target_properties(soldier-skirmish PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS OFF)
 target_compile_definitions(soldier-skirmish PRIVATE SDL_MAIN_HANDLED)
 target_link_libraries(soldier-skirmish PRIVATE
     SDL2::SDL2 SDL2_image::SDL2_image SDL2_ttf::SDL2_ttf Threads::Threads)
