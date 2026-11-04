@@ -1,19 +1,16 @@
 #pragma once
-#include<iostream>
-class Model;
-class View;
+#include "frameClock.h"
+#include "view.h"
 
+namespace skirmish {
 class Controller {
-private:
-	Model* model;
-	View* view;
+  public:
+    Controller(Model &model, View &view) : model_(model), view_(view) {}
+    void run(bool smokeTest = false, const std::filesystem::path &screenshot = {});
 
-public:
-	Controller(Model* model, bool smokeTest = false);
-
-	void start();
-
-	void setVision();
-
-	void pause();
+  private:
+    Model &model_;
+    View &view_;
+    int vision_ = 0;
 };
+} // namespace skirmish

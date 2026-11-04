@@ -1,42 +1,40 @@
-#include <SDL.h>
-#include <filesystem>
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include "model.h"
+#include "appOptions.h"
 #include "controller.h"
 #include "runtimeAssets.h"
+#include <iostream>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     try {
         SDL_SetMainReady();
-        char* base = SDL_GetBasePath();
-        if (!base) throw std::runtime_error("Cannot locate executable directory");
-        std::filesystem::path assets = std::filesystem::u8path(base) / "assets";
-        SDL_free(base);
-        bool check = false, smoke = false;
-        for (int i = 1; i < argc; ++i) {
-            const std::string arg = argv[i];
-            if (arg == "--assets" && i+1 < argc) assets = argv[++i];
-            else if (arg == "--check-assets") check = true;
-            else if (arg == "--smoke-test") smoke = true;
-            else if (arg == "--help") {
-                std::cout << "soldier-skirmish [--assets DIRECTORY] [--check-assets | --smoke-test]\n";
-                return 0;
-            } else throw std::runtime_error("Unknown or incomplete argument: " + arg);
+        std::unique_ptr<char, decltype(&SDL_free)> base(SDL_GetBasePath(), SDL_free);
+        if (!base)
+            throw std::runtime_error("Cannot locate executable directory");
+        const auto options =
+            skirmish::parseOptions(argc, argv, std::filesystem::u8path(base.get()) / "assets");
+        if (options.help) {
+            skirmish::printHelp();
+            return 0;
         }
-        setAssetDirectory(assets);
+        if (options.headless) {
+            skirmish::Model model(
+                skirmish::Chessboard::load(options.assets / "map.txt", options.assets / "base.txt"),
+                options.simulation);
+            return skirmish::runHeadless(model, options.ticks, options.requireFinished);
+        }
+        setAssetDirectory(options.assets);
         validateAssets();
-        if (check) {
+        if (options.check) {
             std::cout << "Assets and map/base configuration are valid.\n";
             return 0;
         }
-        // Detached simulation workers retain the model until process exit.
-        // Managed shutdown remains a TODO in README.md.
-        Model* model = new Model(assetPath("map.txt"), assetPath("base.txt"));
-        Controller controller(model, smoke);
+        skirmish::Model model(
+            skirmish::Chessboard::load(options.assets / "map.txt", options.assets / "base.txt"),
+            options.simulation);
+        skirmish::View view;
+        skirmish::Controller controller(model, view);
+        controller.run(options.smoke, options.screenshot);
         return 0;
-    } catch (const std::exception& error) {
+    } catch (const std::exception &error) {
         std::cerr << "Soldier Skirmish: " << error.what() << '\n';
         return 1;
     }

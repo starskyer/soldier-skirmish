@@ -1,30 +1,37 @@
 #pragma once
-#include<iostream>
-#include<string>
-#include<vector>
-class Base;
-class Chessboard;
-class Soldier;
-class View;
+#include "turnResolver.h"
+#include "vision.h"
+#include <string>
 
-class Model {
-	friend class View;
-private:
-	std::vector<View*> views; // Observers of model
-	Chessboard* chessboard; // Soldiers, bases and visions are included in chessboard
-
-public:
-	std::string mapPath, basePath;
-
-	Model(std::string mapPath, std::string basePath);
-
-	void start();
-
-	void start_test();
-
-	void registerObservers(View* view);
-
-	void notifyObservers(); // Update views
-
-	void pause();
+namespace skirmish {
+struct SimulationOptions {
+    std::uint32_t seed = 1;
+    bool autoSpawn = true;
+    bool baseAttacks = true;
+    Tick spawnPeriod = BASE_GENTIME * TicksPerSecond;
 };
+class Model {
+  public:
+    explicit Model(Chessboard board, SimulationOptions options = {});
+    UnitId deploy(UnitKind kind, Team team, Cell position, int hp = -1);
+    void start();
+    void togglePause();
+    void stop();
+    bool step();
+    const Chessboard &board() const { return board_; }
+    const BattleState &state() const { return state_; }
+    const Vision &vision() const { return vision_; }
+    void assertInvariants() const;
+    std::string fingerprint() const;
+
+  private:
+    Chessboard board_;
+    SimulationOptions options_;
+    BattleState state_;
+    Vision vision_;
+    UnitId nextId_ = 1;
+    std::mt19937 spawnRandom_, conflictRandom_;
+    std::uint64_t spawnDraws_ = 0, conflictDraws_ = 0;
+    UnitId insert(UnitKind kind, Team team, Cell position, int hp = -1);
+};
+} // namespace skirmish

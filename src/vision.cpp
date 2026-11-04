@@ -1,71 +1,28 @@
-#include<iostream>
-#include<vector>
-#include "chessboard.h"
-#include "base.h"
-#include "soldier.h"
 #include "vision.h"
-#include "globalParameters.h"
+#include <algorithm>
 
-void Vision::visionUpdate() {
-	getVision();
+namespace skirmish {
+Vision::Vision(const Chessboard &board)
+    : masks_{std::vector<unsigned char>(board.size()), std::vector<unsigned char>(board.size())} {}
+void Vision::refresh(const Chessboard &board, const BattleState &state) {
+    for (auto &mask : masks_)
+        std::fill(mask.begin(), mask.end(), 0);
+    for (const auto &base : state.bases)
+        if (base.hp > 0)
+            for (Cell p : board.around(base.center, base.range))
+                masks_[teamIndex(base.team)][board.index(p)] = 1;
+    for (const auto &entry : state.units) {
+        const auto &unit = entry.second;
+        if (unit.hp > 0)
+            for (Cell p : board.around(unit.position, unit.stats.visionRange))
+                masks_[teamIndex(unit.team)][board.index(p)] = 1;
+    }
 }
-
-VisionTeam::VisionTeam(Chessboard* chessboard, int team) : team(team) {
-	this->chessboard = chessboard;
-	chessboard->registerVision(this);
-	size = chessboard->getSize();
-	hasVision = new bool[size]{};
+bool Vision::visible(int mode, int cell) const {
+    if (mode < 0 || mode > 2)
+        throw std::invalid_argument("Invalid vision mode");
+    if (mode == 0)
+        return masks_[0].at(cell) != 0 || masks_[1].at(cell) != 0;
+    return masks_[mode - 1].at(cell) != 0;
 }
-
-void VisionTeam::getVision() {
-	std::vector<int> vision;
-	int pos, distance;
-	for (int i = 0; i < size; ++i)
-		hasVision[i] = false;
-
-	pos = chessboard->bases[team - 1]->getPos();
-	distance = BASE_ATKRG;
-	vision = chessboard->posAround(pos, 0, distance);
-	for (int index : vision)
-		hasVision[index] = true;
-
-	for (Soldier* soldier : chessboard->soldiers) {
-		if(soldier->team == this->team){
-			pos = soldier->pos;
-			distance = soldier->visionRange;
-			vision = chessboard->posAround(pos, 0, distance);
-			for (int index : vision)
-				hasVision[index] = true;
-		}
-	}
-}
-
-VisionAll::VisionAll(Chessboard* chessboard) {
-	this->chessboard = chessboard;
-	chessboard->registerVision(this);
-	size = chessboard->getSize();
-	hasVision = new bool[size]{};
-}
-
-void VisionAll::getVision() {
-	std::vector<int> vision;
-	int pos, distance;
-	for (int i = 0; i < size; ++i)
-		hasVision[i] = false;
-
-	for (int i = 0; i < 2; ++i) {
-		pos = chessboard->bases[i]->getPos();
-		distance = BASE_ATKRG;
-		vision = chessboard->posAround(pos, 0, distance);
-		for (int index : vision)
-			hasVision[index] = true;
-	}
-
-	for (Soldier* soldier : chessboard->soldiers) {
-		pos = soldier->pos;
-		distance = soldier->visionRange;
-		vision = chessboard->posAround(pos, 0, distance);
-		for (int index : vision)
-			hasVision[index] = true;
-	}
-}
+} // namespace skirmish

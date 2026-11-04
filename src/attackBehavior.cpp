@@ -1,55 +1,84 @@
-#include<iostream>
-#include "chessboard.h"
-#include "base.h"
-#include "soldier.h"
 #include "attackBehavior.h"
+#include "pathfinding.h"
+#include <limits>
 
-BaseAttack::BaseAttack(int atk, Chessboard* chessboard) :
-	atk(atk), chessboard(chessboard) {};
-
-
-// There is certain data race (UB) in BaseAttack::attack as well as SoldierNormalAttack::attack
-void BaseAttack::attack(int pos) {
-	if (chessboard->getSquare(pos)->hasSoldier) { // UB 1: hasSoldier does not synchronize with setSoldier/removeSoldier
-		chessboard->getSquare(pos)->soldier->currentHP -= atk; // UB 2: currentHP is not synchronized with Soldier::move or Soldier::action, etc.
-		if (chessboard->getSquare(pos)->soldier->currentHP < 0) // UB 2
-			chessboard->getSquare(pos)->soldier->currentHP = 0; // UB 2
-		if (chessboard->getSquare(pos)->soldier->currentHP == 0) {
-			chessboard->atk_mtx.lock();
-			chessboard->removeSoldier(pos); // Mutex lock only protects the internal data of chessboard, not the soldier's shared data
-			chessboard->atk_mtx.unlock();
-		}
-		else {
-			chessboard->notifyObservers(); // Any changes of HP need to be printed
-		}
-	}
+namespace skirmish {
+namespace {
+const Soldier *nearestEnemy(const BattleState &state, const Soldier &actor, int range) {
+    const Soldier *selected = nullptr;
+    int best = std::numeric_limits<int>::max();
+    for (const auto &entry : state.units) {
+        const auto &other = entry.second;
+        const int distance = squareDistance(actor.position, other.position);
+        if (other.hp > 0 && other.team != actor.team && distance <= range && distance < best) {
+            selected = &other;
+            best = distance;
+        }
+    }
+    return selected;
 }
-
-SoldierNormalAttack::SoldierNormalAttack(int atk, Chessboard* chessboard) :
-	atk(atk), chessboard(chessboard) {};
-
-void SoldierNormalAttack::attack(int pos) {
-	if (chessboard->getSquare(pos)->hasSoldier) {
-		chessboard->getSquare(pos)->soldier->currentHP -= atk;
-		if (chessboard->getSquare(pos)->soldier->currentHP < 0)
-			chessboard->getSquare(pos)->soldier->currentHP = 0;
-		if (chessboard->getSquare(pos)->soldier->currentHP == 0) {
-			chessboard->atk_mtx.lock();
-			chessboard->removeSoldier(pos);
-			chessboard->atk_mtx.unlock();
-		}
-		else {
-			chessboard->notifyObservers(); // Any changes of HP need to be printed
-		}
-	}
+} // namespace
+Intent AttackBehavior::planUnit(const Chessboard &board, const BattleState &state,
+                                const Soldier &unit) {
+    Intent action{EntityRef::unit(unit.id),
+                  ActionKind::Wait,
+                  unit.position,
+                  unit.position,
+                  std::nullopt,
+                  false};
+    const auto *target =
+        unit.stats.unitDamage > 0 ? nearestEnemy(state, unit, unit.stats.attackRange) : nullptr;
+    if (target) {
+        action.target = EntityRef::unit(target->id);
+        if (state.tick >= unit.nextAttack)
+            action.kind = ActionKind::Attack;
+        return action;
+    }
+    target =
+        unit.stats.unitDamage > 0 ? nearestEnemy(state, unit, unit.stats.visionRange) : nullptr;
+    const Team enemy = opponent(unit.team);
+    if (target)
+        action.target = EntityRef::unit(target->id);
+    else {
+        action.target = EntityRef::base(enemy);
+        if (board.distanceToBase(unit.position, enemy) <= unit.stats.attackRange) {
+            if (state.tick >= unit.nextAttack)
+                action.kind = ActionKind::Attack;
+            return action;
+        }
+    }
+    if (state.tick < unit.nextMove)
+        return action;
+    const auto next = findNextStep(board, state, unit, [&](Cell p) {
+        return target ? squareDistance(p, target->position) <= unit.stats.attackRange
+                      : board.distanceToBase(p, enemy) <= unit.stats.attackRange;
+    });
+    action.waitingForMove = true;
+    if (next) {
+        action.kind = ActionKind::Move;
+        action.destination = *next;
+    }
+    return action;
 }
-
-SoldierBuildingAttack::SoldierBuildingAttack(int atk, Chessboard* chessboard) :
-	atk(atk), chessboard(chessboard) {};
-
-void SoldierBuildingAttack::attack(int pos) {
-	chessboard->getSquare(pos)->base->currentHP -= atk;
-	if (chessboard->getSquare(pos)->base->currentHP < 0)
-		chessboard->getSquare(pos)->base->currentHP = 0;
-	chessboard->notifyObservers(); // Any changes of HP need to be printed
+Intent AttackBehavior::planBase(const BattleState &state, const Base &base) {
+    Intent action{EntityRef::base(base.team),
+                  ActionKind::Wait,
+                  base.center,
+                  base.center,
+                  std::nullopt,
+                  false};
+    if (base.hp <= 0 || state.tick < base.nextAttack)
+        return action;
+    int best = std::numeric_limits<int>::max();
+    for (const auto &entry : state.units) {
+        const auto &unit = entry.second;
+        const int distance = squareDistance(base.center, unit.position);
+        if (unit.hp > 0 && unit.team != base.team && distance <= base.range && distance < best) {
+            best = distance;
+            action.target = EntityRef::unit(unit.id);
+            action.kind = ActionKind::Attack;
+        }
+    }
+    return action;
 }
+} // namespace skirmish

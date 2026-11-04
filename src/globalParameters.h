@@ -1,6 +1,4 @@
 #pragma once
-#define TIME 1000
-
 #define BASE_SIZE 3
 #define BASE_HP 300
 #define BASE_ATK 50

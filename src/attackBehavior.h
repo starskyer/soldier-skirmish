@@ -1,41 +1,11 @@
 #pragma once
-#include<iostream>
-class Chessboard;
+#include "battleState.h"
 
+namespace skirmish {
 class AttackBehavior {
-// All the attack behavior will cost a period of time
-public:
-	virtual void attack(int target) = 0; // May modify the chessboard
+  public:
+    static Intent planUnit(const Chessboard &board, const BattleState &snapshot,
+                           const Soldier &unit);
+    static Intent planBase(const BattleState &snapshot, const Base &base);
 };
-
-class BaseAttack : public AttackBehavior {
-// Attack enemy at target position.
-// Attack behavior itself will not check if the position is in attack range.
-private:
-	int atk;
-	Chessboard* chessboard;
-public:
-	BaseAttack(int atk, Chessboard* chessboard);
-
-	void attack(int target);
-};
-
-class SoldierNormalAttack : public AttackBehavior {
-private:
-	int atk;
-	Chessboard* chessboard;
-public:
-	SoldierNormalAttack(int atk, Chessboard* chessboard);
-
-	void attack(int target);
-};
-
-class SoldierBuildingAttack : public AttackBehavior {
-private:
-	int atk;
-	Chessboard* chessboard;
-public:
-	SoldierBuildingAttack(int atk, Chessboard* chessboard);
-
-	void attack(int target);
-};
+} // namespace skirmish

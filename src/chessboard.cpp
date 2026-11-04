@@ -1,244 +1,130 @@
-#include<iostream>
-#include<iomanip>
-#include<fstream>
-#include<thread>
-#include<algorithm>
-#include<filesystem>
-#include "base.h"
-#include "soldier.h"
-#include "vision.h"
 #include "chessboard.h"
-#include "model.h"
-#include "globalParameters.h"
+#include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <limits>
+#include <string>
 
-Square::Square() {
-	type = 0;
-	hasSoldier = false;
-	hasBase = false;
-	soldier = NULL;
-	base = NULL;
+namespace skirmish {
+int squareDistance(Cell a, Cell b) {
+    return std::max(std::abs(a.x - b.x), std::abs(a.y - b.y));
 }
-
-void Square::setBase(Base* base) {
-	this->hasBase = true;
-	this->base = base;
+bool Chessboard::contains(Cell p) const {
+    return p.x >= 0 && p.y >= 0 && p.x < columns_ && p.y < rows_;
 }
-
-void Square::setSoldier(Soldier* soldier) {
-	hasSoldier = true;
-	this->soldier = soldier;
+int Chessboard::index(Cell p) const {
+    if (!contains(p))
+        throw std::out_of_range("Cell outside battlefield");
+    return p.y * columns_ + p.x;
 }
-
-void Square::removeSoldier() {
-	hasSoldier = false;
-	this->soldier = NULL;
+Cell Chessboard::cell(int i) const {
+    if (i < 0 || i >= size())
+        throw std::out_of_range("Invalid cell index");
+    return {i % columns_, i / columns_};
 }
-
-Chessboard::Chessboard(std::string mapPath, std::string basePath) {
-	busy = false;
-	pause = false;
-	// Initialize chessboard from map path
-	std::ifstream ifsMap;
-	ifsMap.open(std::filesystem::u8path(mapPath), std::ios::in);
-	std::string buf;
-	int team, pos, soldierGenPos;
-	std::getline(ifsMap, buf);
-	this->size = std::stoi(buf);
-
-	visions = {}; soldiers = {};	
-	chessboard = new Square[size];
-
-	pos = 0;
-	while (std::getline(ifsMap, buf)) {
-		if (!buf.empty() && buf.back() == '\r') buf.pop_back();
-		// buf is a line of map.txt
-		this->length = buf.size();
-		for (int i = 0; i < buf.size(); ++i, ++pos) {
-			int type = buf[i] - '0';
-			if (type != 0) {
-				chessboard[pos].type = type;
-			}
-		}
-	}
-	this->width = size / length;
-	ifsMap.close();
-
-	// Initialize bases from base path
-	std::ifstream ifsBase;
-	ifsBase.open(std::filesystem::u8path(basePath), std::ios::in);
-	
-	std::vector<int> baseSquare;
-	for (int i = 0; i < 2; ++i) {
-		ifsBase >> team >> pos >> soldierGenPos;
-
-		// Create base and detached threads for base->soldierGen() and base->attack()
-		bases[i] = new Base(pos, team, soldierGenPos, this);
-
-		// Set corresponding squares to base square
-		baseSquare = posAround(pos, 0, BASE_SIZE / 2);
-		for (int index : baseSquare) {
-			chessboard[index].setBase(bases[i]);
-		}
-	}		
-	ifsBase.close();
-
-	//Initialize vision
-	VisionAll* vision0 = new VisionAll(this);
-	VisionTeam* vision1 = new VisionTeam(this, 1);
-	VisionTeam* vision2 = new VisionTeam(this, 2);
+int Chessboard::terrain(Cell p) const {
+    return terrain_.at(index(p));
 }
-
-void Chessboard::registerVision(Vision* vision) {
-	visions.push_back(vision);
+int Chessboard::baseAt(Cell p) const {
+    return baseIndex_.at(index(p));
 }
-
-void Chessboard::registerModel(Model* model) {
-	this->model = model;
+bool Chessboard::walkable(Cell p) const {
+    return contains(p) && terrain(p) == 0 && baseAt(p) == -1;
 }
-
-void Chessboard::notifyObservers() {
-	// Will only notify observers when observers are not busy
-	if (busy == false) {
-		busy = true;
-		for (int i = 0; i < visions.size(); ++i)
-			visions[i]->visionUpdate();
-		model->notifyObservers();
-		busy = false;
-	}
-	return;
+int Chessboard::distanceToBase(Cell p, Team team) const {
+    const auto center = bases_.at(teamIndex(team)).center;
+    return std::max(
+        {0, std::abs(p.x - center.x) - BaseRadius, std::abs(p.y - center.y) - BaseRadius});
 }
-
-int Chessboard::getLength() {
-	return length;
+std::vector<Cell> Chessboard::neighbors(Cell p) const {
+    std::vector<Cell> result;
+    for (Cell next :
+         {Cell{p.x, p.y - 1}, Cell{p.x, p.y + 1}, Cell{p.x - 1, p.y}, Cell{p.x + 1, p.y}})
+        if (contains(next))
+            result.push_back(next);
+    return result;
 }
-
-int Chessboard::getWidth() {
-	return width;
+std::vector<Cell> Chessboard::around(Cell p, int range) const {
+    std::vector<Cell> result;
+    for (int y = std::max(0, p.y - range); y <= std::min(rows_ - 1, p.y + range); ++y)
+        for (int x = std::max(0, p.x - range); x <= std::min(columns_ - 1, p.x + range); ++x)
+            result.push_back({x, y});
+    return result;
 }
-
-int Chessboard::getSize() {
-	return size;
+Chessboard::Chessboard(int columns, int rows, std::vector<int> terrain,
+                       std::array<BasePlacement, 2> bases)
+    : columns_(columns), rows_(rows), terrain_(std::move(terrain)), bases_(bases) {
+    if (columns <= 0 || rows <= 0 || columns > 1080 || rows > 1080 ||
+        static_cast<std::size_t>(columns) * rows != terrain_.size() || terrain_.size() > 1000000)
+        throw std::invalid_argument("Invalid battlefield dimensions");
+    if (std::any_of(terrain_.begin(), terrain_.end(), [](int t) { return t < 0 || t > 9; }))
+        throw std::invalid_argument("Invalid terrain type");
+    baseIndex_.assign(size(), -1);
+    for (int i = 0; i < 2; ++i) {
+        const auto &base = bases_[i];
+        if (teamIndex(base.team) != i || !contains(base.center) || base.center.x < BaseRadius ||
+            base.center.y < BaseRadius || base.center.x + BaseRadius >= columns ||
+            base.center.y + BaseRadius >= rows)
+            throw std::invalid_argument("Invalid base placement");
+        for (Cell p : around(base.center, BaseRadius)) {
+            const int k = index(p);
+            if (terrain_[k] != 0 || baseIndex_[k] != -1)
+                throw std::invalid_argument("Overlapping or obstructed base");
+            baseIndex_[k] = i;
+        }
+    }
+    for (const auto &base : bases_)
+        if (!walkable(base.spawn))
+            throw std::invalid_argument("Invalid spawn cell");
+    if (bases_[0].spawn == bases_[1].spawn)
+        throw std::invalid_argument("Bases must have distinct spawn cells");
 }
-
-//int Chessboard::Cor2Pos(Coordinate* cor) {
-//	return cor->y * length + cor->x;
-//}
-//
-//void Chessboard::Pos2Cor(Coordinate* cor, int pos) {
-//	cor->x = pos % length;
-//	cor->y = pos / length;
-//	return;
-//}
-
-std::vector<int> Chessboard::posAround(int pos, int distance) {
-	return Chessboard::posAround(pos, 1, distance);
+Chessboard Chessboard::parse(std::istream &map, std::istream &bases) {
+    std::string line;
+    if (!std::getline(map, line))
+        throw std::invalid_argument("Missing map size");
+    if (!line.empty() && line.back() == '\r')
+        line.pop_back();
+    std::size_t used = 0;
+    const int size = std::stoi(line, &used);
+    if (used != line.size() || size <= 0 || size > 1000000)
+        throw std::invalid_argument("Invalid map size");
+    int columns = 0, rows = 0;
+    std::vector<int> terrain;
+    while (std::getline(map, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty() || line.find_first_not_of("0123456789") != std::string::npos ||
+            (columns && static_cast<int>(line.size()) != columns))
+            throw std::invalid_argument("Invalid map row");
+        columns = static_cast<int>(line.size());
+        ++rows;
+        if (terrain.size() + line.size() > static_cast<std::size_t>(size))
+            throw std::invalid_argument("Too many map cells");
+        for (char c : line)
+            terrain.push_back(c - '0');
+    }
+    if (static_cast<int>(terrain.size()) != size)
+        throw std::invalid_argument("Map size mismatch");
+    std::array<BasePlacement, 2> placements{};
+    for (int i = 0; i < 2; ++i) {
+        long long team, center, spawn;
+        if (!(bases >> team >> center >> spawn) || team != i + 1 || center < 0 || center >= size ||
+            spawn < 0 || spawn >= size || columns == 0)
+            throw std::invalid_argument("Invalid base configuration");
+        placements[i] = {static_cast<Team>(team),
+                         {static_cast<int>(center) % columns, static_cast<int>(center) / columns},
+                         {static_cast<int>(spawn) % columns, static_cast<int>(spawn) / columns}};
+    }
+    if (bases >> line)
+        throw std::invalid_argument("Unexpected base data");
+    return Chessboard(columns, rows, std::move(terrain), placements);
 }
-
-std::vector<int> Chessboard::posAround(int pos, int distanceFrom, int distanceTo) {
-	std::vector<int> results;
-	int result;
-	int d, i, j;
-	for (d = distanceFrom; d <= distanceTo; ++d) {
-		for (i = -d; i <= d; ++i) {
-			result = (0 <= pos % length + i) && (pos % length + i < length) ?
-				(pos - d * length + i) : -1;
-			if (0 <= result && result < size)
-				results.push_back(result);
-		}
-		for (j = -d + 1; j <= d - 1; ++j) {
-			result = (0 <= pos % length - d) ?
-				(pos + j * length - d) : -1;
-			if (0 <= result && result < size)
-				results.push_back(result);
-			result = (pos % length + d < length) ?
-				(pos + j * length + d) : -1;
-			if (0 <= result && result < size)
-				results.push_back(result);
-		}
-		for (i = -d; i <= d; ++i) {
-			result = (0 <= pos % length + i) && (pos % length + i < length) ?
-				(pos + d * length + i) : -1;
-			if (0 <= result && result < size)
-				results.push_back(result);
-		}
-	}
-	return results;
+Chessboard Chessboard::load(const std::filesystem::path &mapPath,
+                            const std::filesystem::path &basePath) {
+    std::ifstream map(mapPath), bases(basePath);
+    if (!map || !bases)
+        throw std::runtime_error("Cannot open map/base files");
+    return parse(map, bases);
 }
-
-void Chessboard::setSoldier(int pos, Soldier* soldier) {
-	mtx.lock();
-	chessboard[pos].setSoldier(soldier);
-	soldiers.push_back(soldier);
-	notifyObservers(); // notifyObservers should not be called inside mutex lock as it may cause potential deadlock
-	mtx.unlock();
-}
-
-void Chessboard::removeSoldier(int pos) {
-	mtx.lock();
-	Soldier* soldier = chessboard[pos].soldier;
-	chessboard[pos].removeSoldier();
-	// TIP: The thread of the removed soldier will also stop
-	auto index = std::find(soldiers.begin(), soldiers.end(), soldier);
-	if (index != soldiers.end()) {
-		soldiers.erase(index);
-	}	
-	notifyObservers();
-	mtx.unlock();
-}
-
-Square* Chessboard::getSquare(int pos) {
-	return &(chessboard[pos]);
-}
-
-int Chessboard::getEnemyBasePos(int team) {
-	if (bases[0]->getTeam() != team)
-		return bases[0]->getPos();
-	else
-		return bases[1]->getPos();
-}
-
-void Chessboard::printBoardConsole() {
-	// Print the chessboard in console window.
-	int i, j, pos, type, team;
-	for (j = 0; j < width; ++j) {
-		for (i = 0; i < length; ++i) {
-			pos = j * length + i;
-			if (chessboard[pos].hasBase) {
-				if (chessboard[pos].base->getTeam() == 1)
-					std::cout << 'B';
-				else
-					std::cout << 'b';
-			}
-			else if (chessboard[pos].hasSoldier) {
-				type = chessboard[pos].soldier->type();
-				team = chessboard[pos].soldier->team;
-				switch (type) {
-				case 0: {
-					if (team == 1)	std::cout << 'I';
-					else			std::cout << 'i';
-					break;
-				}
-				case 1: {
-					if (team == 1)	std::cout << 'A';
-					else			std::cout << 'a';
-					break;
-				}
-				case 2: {
-					if (team == 1)	std::cout << 'S';
-					else			std::cout << 's';
-					break;
-				}
-				}
-			}
-			else if (chessboard[pos].type != 0) {
-				std::cout << chessboard[pos].type;
-			}
-			else
-				std::cout << ' ';
-				
-		}
-		std::cout << std::endl;
-	}
-	std::cout << "Team 1 base HP: " << std::setw(3) << bases[0]->currentHP << std::endl;
-	std::cout << "Team 2 base HP: " << std::setw(3) << bases[1]->currentHP << std::endl;
-}
+} // namespace skirmish
