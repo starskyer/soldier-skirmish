@@ -1,0 +1,34 @@
+#pragma once
+#define TIME 1000
+
+#define BASE_SIZE 3
+#define BASE_HP 300
+#define BASE_ATK 50
+#define BASE_ATKRG 4
+#define BASE_GENTIME 5
+
+#define INFANTRY_HP 80
+#define INFANTRY_ATK1 15
+#define INFANTRY_ATK2 15
+#define INFANTRY_ATKRG 1
+#define INFANTRY_MVSPD 3
+#define INFANTRY_VSNRG 3
+
+#define ARCHER_HP 55
+#define ARCHER_ATK1 15
+#define ARCHER_ATK2 20
+#define ARCHER_ATKRG 2
+#define ARCHER_MVSPD 3
+#define ARCHER_VSNRG 3
+
+#define SIEGEGUN_HP 80
+#define SIEGEGUN_ATK1 0
+#define SIEGEGUN_ATK2 30
+#define SIEGEGUN_ATKRG 4
+#define SIEGEGUN_MVSPD 2
+#define SIEGEGUN_VSNRG 4
+
+#define WINDOW_WIDTH 1080
+#define WINDOW_HEIGHT 1230
+#define BASEBAR_HEIGHT 50
+#define MENU_HEIGHT 100

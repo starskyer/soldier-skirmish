@@ -1,0 +1,15 @@
+/build*/
+/out/
+/.vs/
+/.vscode/
+*.user
+*.suo
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+.DS_Store
+.private/
+.portable/
